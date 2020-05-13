@@ -16,8 +16,11 @@
          fee/1,
          is_valid/2,
          master_key/1,
+         multi_keys/1,
          key_proof/1, key_proof/2,
+         multi_key_proofs/1, multi_key_proofs/2,
          proof/1, proof/2,
+         multi_proofs/1, multi_proofs/2,
          vars/1,
          decoded_vars/1,
          version_predicate/1,
@@ -56,19 +59,22 @@
 -export_type([txn_vars/0]).
 
 %% message var_v1 {
-%%     string type = 1;
-%%     bytes value = 2;
+%%     string name = 1;
+%%     string type = 2;
+%%     bytes value = 3;
 %% }
 
 %% message txn_vars_v1 {
 %%     map<string, var> vars = 1;
 %%     uint32 version_predicate = 2;
-%%     bytes proof = 3;
 %%     bytes master_key = 4;
 %%     bytes key_proof = 5;
 %%     repeated bytes cancels = 6;
 %%     repeated bytes unsets = 7;
 %%     uint32 nonce = 8;
+%%     repeated bytes multi_keys = 9;
+%%     repeated bytes multi_proofs = 10;
+%%     repeated bytes multi_key_proof = 11;
 %% }
 
 
@@ -80,20 +86,23 @@ new(Vars, Nonce) ->
 new(Vars, Nonce, Optional) ->
     VersionP = maps:get(version_predicate, Optional, 0),
     MasterKey = maps:get(master_key, Optional, <<>>),
+    MultiKeyProofs = maps:get(multi_key_proofs, Optional, []),
     KeyProof = maps:get(key_proof, Optional, <<>>),
     Unsets = maps:get(unsets, Optional, []),
     Cancels = maps:get(cancels, Optional, []),
     %% note that string inputs are normalized on creation, which has
     %% an effect on proof encoding :/
 
+    {MultiKeys, KeyProofs} = lists:unzip(lists:sort(MultiKeyProofs)),
     #blockchain_txn_vars_v1_pb{vars = lists:sort(encode_vars(Vars)),
                                version_predicate = VersionP,
-                               master_key = MasterKey,
-                               key_proof = KeyProof,
                                unsets = encode_unsets(Unsets),
                                cancels = Cancels,
-                               nonce = Nonce}.
-
+                               nonce = Nonce,
+                               master_key = MasterKey,
+                               key_proof = KeyProof,
+                               multi_keys = MultiKeys,
+                               multi_key_proofs = KeyProofs}.
 
 encode_vars(Vars) ->
     V = maps:to_list(Vars),
@@ -154,17 +163,32 @@ fee(_Txn) ->
 master_key(Txn) ->
     Txn#blockchain_txn_vars_v1_pb.master_key.
 
+multi_keys(Txn) ->
+    Txn#blockchain_txn_vars_v1_pb.multi_keys.
+
 key_proof(Txn) ->
     Txn#blockchain_txn_vars_v1_pb.key_proof.
 
 key_proof(Txn, Proof) ->
     Txn#blockchain_txn_vars_v1_pb{key_proof = Proof}.
 
+multi_key_proofs(Txn) ->
+    Txn#blockchain_txn_vars_v1_pb.multi_key_proofs.
+
+multi_key_proofs(Txn, Proofs) ->
+    Txn#blockchain_txn_vars_v1_pb{multi_key_proofs = Proofs}.
+
 proof(Txn) ->
     Txn#blockchain_txn_vars_v1_pb.proof.
 
 proof(Txn, Proof) ->
     Txn#blockchain_txn_vars_v1_pb{proof = Proof}.
+
+multi_proofs(Txn) ->
+    Txn#blockchain_txn_vars_v1_pb.multi_proofs.
+
+multi_proofs(Txn, Proofs) ->
+    Txn#blockchain_txn_vars_v1_pb{multi_proofs = Proofs}.
 
 unset_proofs(Txn) ->
     Txn#blockchain_txn_vars_v1_pb{proof = <<>>,
@@ -228,27 +252,7 @@ is_valid(Txn, Chain) ->
                 end,
 
                 %% here we can accept a valid master key
-                case master_key(Txn) of
-                    <<>> when Gen == true ->
-                        throw({error, genesis_requires_master_key});
-                    <<>> ->
-                        ok;
-                    Key ->
-                        KeyProof =
-                            case key_proof(Txn) of
-                                <<>> ->
-                                    throw({error, no_master_key_proof}),
-                                    <<>>;
-                                P ->
-                                    P
-                            end,
-                        case verify_key(Artifact, Key, KeyProof) of
-                            true ->
-                                ok;
-                            _ ->
-                                throw({error, bad_master_key})
-                        end
-                end,
+                ok = validate_master_keys(Txn, Gen, Artifact, Ledger),
                 case Gen of
                     true ->
                         %% genesis block requires master key and has already
@@ -343,12 +347,28 @@ legacy_is_valid(Txn, Chain) ->
                 %% validated the proof if it has made it here.
                 ok;
             _ ->
-                {ok, MasterKey} = blockchain_ledger_v1:master_key(Ledger),
-                case verify_key(Artifact, MasterKey, proof(Txn)) of
-                    true ->
-                        ok;
+                case blockchain:config(?use_multi_keys, Ledger) of
+                    {ok, true} ->
+                        {ok, MasterKeys} = blockchain_ledger_v1:multi_keys(Ledger),
+                        Proofs = multi_proofs(Txn),
+                        Votes =
+                            lists:sum(
+                              [case verify_key(Artifact, MasterKey, Proof) of
+                                   true -> 1;
+                                   _ -> 0
+                               end
+                               || {MasterKey, Proof} <- lists:zip(MasterKeys, Proofs)]),
+                        Majority = majority(length(MasterKeys)),
+                        case Votes >= Majority of
+                            true -> ok;
+                            false -> throw({error, {insufficient_votes, Votes, Majority}})
+                        end;
                     _ ->
-                        throw({error, bad_block_proof})
+                        {ok, MasterKey} = blockchain_ledger_v1:master_key(Ledger),
+                        case verify_key(Artifact, MasterKey, proof(Txn)) of
+                            true -> ok;
+                            _ -> throw({error, bad_block_proof})
+                        end
                 end
         end,
         lists:foreach(
@@ -372,6 +392,57 @@ legacy_is_valid(Txn, Chain) ->
             lager:error("invalid chain var transaction: ~p reason ~p", [Txn, Ret]),
             Ret
     end.
+
+validate_master_keys(Txn, Gen, Artifact, Ledger) ->
+    case blockchain:config(?use_multi_keys, Ledger) of
+        {ok, true} ->
+            case multi_keys(Txn) of
+                [] ->
+                    ok;
+                MultiKeys when length(MultiKeys) < 3 ->
+                    throw({error, too_few_keys});
+                MultiKeys ->
+                    KeyProofs =
+                        case multi_key_proofs(Txn) of
+                            [] ->
+                                throw({error, no_multi_keys_proofs});
+                            Ps ->
+                                Ps
+                        end,
+                    [case verify_key(Artifact, Key, KeyProof) of
+                        true ->
+                             ok;
+                         _ ->
+                             throw({error, bad_multi_key_proof})
+                     end
+                     || {Key, KeyProof} <- lists:zip(MultiKeys, KeyProofs)]
+            end;
+        _ ->
+            case master_key(Txn) of
+                <<>> when Gen == true ->
+                    throw({error, genesis_requires_master_key});
+                <<>> ->
+                    ok;
+                Key ->
+                    KeyProof =
+                        case key_proof(Txn) of
+                            <<>> ->
+                                throw({error, no_master_key_proof}),
+                                <<>>;
+                            P ->
+                                P
+                        end,
+                    case verify_key(Artifact, Key, KeyProof) of
+                        true ->
+                            ok;
+                        _ ->
+                            throw({error, bad_master_key})
+                    end
+            end
+    end.
+
+majority(N) ->
+    N div 2 + 1.
 
 %% TODO: we need a generalized hook here for when chain vars change
 %% and invalidate something in the ledger, to enable stuff to stay consistent

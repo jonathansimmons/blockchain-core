@@ -284,3 +284,6 @@
 -define(sc_grace_blocks, sc_grace_blocks).
 %% DC Payload size, set to 24
 -define(dc_payload_size, dc_payload_size).
+
+%% Multi-key
+-define(use_multi_keys, use_multi_keys).
