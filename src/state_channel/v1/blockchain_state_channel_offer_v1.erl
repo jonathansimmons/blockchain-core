@@ -49,7 +49,7 @@ from_packet(Packet, Hotspot, Region) ->
 hotspot(#blockchain_state_channel_offer_v1_pb{hotspot=Hotspot}) ->
     Hotspot.
 
--spec devaddr(offer()) -> binary().
+-spec devaddr(offer()) -> non_neg_integer().
 devaddr(#blockchain_state_channel_offer_v1_pb{devaddr=DevAddr}) ->
     DevAddr.
 
@@ -57,7 +57,7 @@ devaddr(#blockchain_state_channel_offer_v1_pb{devaddr=DevAddr}) ->
 region(#blockchain_state_channel_offer_v1_pb{region=Region}) ->
     Region.
 
--spec packet_hash(offer()) -> atom().
+-spec packet_hash(offer()) -> binary().
 packet_hash(#blockchain_state_channel_offer_v1_pb{packet_hash=PacketHash}) ->
     PacketHash.
 
