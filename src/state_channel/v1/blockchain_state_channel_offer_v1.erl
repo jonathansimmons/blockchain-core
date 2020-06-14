@@ -37,7 +37,7 @@ from_packet(Packet, Hotspot, Region) ->
         {devaddr, DevAddr} ->
             #blockchain_state_channel_offer_v1_pb{
                devaddr=DevAddr,
-               packet_hash=crypto:hash(sha256, term_to_binary(Packet)),
+               packet_hash=blockchain_helium_packet_v1:packet_hash(Packet),
                payload_size=byte_size(blockchain_helium_packet_v1:payload(Packet)),
                hotspot=Hotspot,
                signature = <<>>,

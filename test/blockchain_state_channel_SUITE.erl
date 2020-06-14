@@ -263,9 +263,6 @@ full_test(Config) ->
 
     ok = ct_rpc:call(RouterNode, meck, unload, [blockchain_worker]),
 
-    %% XXX: Make it intentionally fail for testing
-    ok = RouterLedger,
-
     ok.
 
 dup_packets_test(Config) ->
