@@ -580,6 +580,20 @@ validate_oracle_keys([H|T]) ->
             throw({error, {invalid_oracle_pubkey, H}})
     end.
 
+validate_staking_keys_format(Str) when is_binary(Str) ->
+    PubKeys = blockchain_utils:vars_keys_to_list(Str),
+    validate_staking_keys(PubKeys).
+
+validate_staking_keys([]) -> ok;
+validate_staking_keys([H|T]) ->
+    try
+        _ = libp2p_crypto:bin_to_pubkey(H),
+        validate_staking_keys(T)
+    catch
+        _C:_E:_St ->
+            throw({error, {invalid_staking_pubkey, H}})
+    end.
+
 %% ALL VALIDATION ERRORS MUST THROW ERROR TUPLES
 %%
 %% election vars
@@ -875,13 +889,9 @@ validate_var(?txn_fees, Value) ->
     end;
 
 validate_var(?staking_keys, Value) ->
-    case Value of
-        [] -> throw({error, {invalid_staking_keys, Value}});
-        X when is_list(X) -> ok;
-        _ -> throw({error, {invalid_staking_keys, Value}})
-    end;
+    validate_staking_keys_format(Value);
 
-%% TODO finalize max price for each below
+%% txn fee vars below are in DC
 validate_var(?staking_fee_txn_oui_v1, Value) ->
     %% the staking fee price for an OUI, in DC
     validate_int(Value, "staking_fee_txn_oui_v1", 0, 1000 * ?USD_TO_DC, false);

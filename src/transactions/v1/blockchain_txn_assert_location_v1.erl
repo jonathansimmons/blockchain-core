@@ -377,48 +377,44 @@ absorb(Txn, Chain) ->
         {error, _Reason}=Error ->
             Error;
         ok ->
-            blockchain_ledger_v1:add_gateway_location(Gateway, Location, Nonce, Ledger)
-    end,
+            blockchain_ledger_v1:add_gateway_location(Gateway, Location, Nonce, Ledger),
+            %% hex index update code needs to be unconditional and hard-coded
+            %% until we have chain var update hook
+            %% {ok, Res} = blockchain:config(?poc_target_hex_parent_res, Ledger),
+            Res = 5,
+            OldLoc = blockchain_ledger_gateway_v2:location(OldGw),
+            OldHex =
+                case OldLoc of
+                    undefined ->
+                        undefined;
+                    _ ->
+                        h3:parent(OldLoc, Res)
+                end,
+            Hex = h3:parent(Location, Res),
+            case Hex of
+                OldHex ->
+                    %% moved within the hex, no need to update
+                    ok;
+                _ when OldHex == undefined ->
+                    blockchain_ledger_v1:add_to_hex(Hex, Gateway, Ledger);
+                _ ->
+                    blockchain_ledger_v1:remove_from_hex(OldHex, Gateway, Ledger),
+                    blockchain_ledger_v1:add_to_hex(Hex, Gateway, Ledger)
+            end,
 
-    %% TODO - the flow here allows the hex to be updated even if the gateway location is not updated
-    %%        is this a bug or for some reason deliberate?
-
-    %% hex index update code needs to be unconditional and hard-coded
-    %% until we have chain var update hook
-    %% {ok, Res} = blockchain:config(?poc_target_hex_parent_res, Ledger),
-    Res = 5,
-    OldLoc = blockchain_ledger_gateway_v2:location(OldGw),
-    OldHex =
-        case OldLoc of
-            undefined ->
-                undefined;
-            _ ->
-                h3:parent(OldLoc, Res)
-        end,
-    Hex = h3:parent(Location, Res),
-    case Hex of
-        OldHex ->
-            %% moved within the hex, no need to update
-            ok;
-        _ when OldHex == undefined ->
-            blockchain_ledger_v1:add_to_hex(Hex, Gateway, Ledger);
-        _ ->
-            blockchain_ledger_v1:remove_from_hex(OldHex, Gateway, Ledger),
-            blockchain_ledger_v1:add_to_hex(Hex, Gateway, Ledger)
-    end,
-
-    case blockchain:config(?poc_version, Ledger) of
-        {ok, V} when V > 3 ->
-            %% don't update neighbours anymore
-            ok;
-        _ ->
-            %% TODO gc this nonsense in some deterministic way
-            Gateways = blockchain_ledger_v1:active_gateways(Ledger),
-            Neighbors = blockchain_poc_path:neighbors(Gateway, Gateways, Ledger),
-            {ok, Gw} = blockchain_ledger_v1:find_gateway_info(Gateway, Ledger),
-            ok = blockchain_ledger_v1:fixup_neighbors(Gateway, Gateways, Neighbors, Ledger),
-            Gw1 = blockchain_ledger_gateway_v2:neighbors(Neighbors, Gw),
-            ok = blockchain_ledger_v1:update_gateway(Gw1, Gateway, Ledger)
+            case blockchain:config(?poc_version, Ledger) of
+                {ok, V} when V > 3 ->
+                    %% don't update neighbours anymore
+                    ok;
+                _ ->
+                    %% TODO gc this nonsense in some deterministic way
+                    Gateways = blockchain_ledger_v1:active_gateways(Ledger),
+                    Neighbors = blockchain_poc_path:neighbors(Gateway, Gateways, Ledger),
+                    {ok, Gw} = blockchain_ledger_v1:find_gateway_info(Gateway, Ledger),
+                    ok = blockchain_ledger_v1:fixup_neighbors(Gateway, Gateways, Neighbors, Ledger),
+                    Gw1 = blockchain_ledger_gateway_v2:neighbors(Neighbors, Gw),
+                    ok = blockchain_ledger_v1:update_gateway(Gw1, Gateway, Ledger)
+            end
     end.
 
 %%--------------------------------------------------------------------

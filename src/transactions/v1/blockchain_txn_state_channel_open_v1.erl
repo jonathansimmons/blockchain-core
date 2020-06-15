@@ -216,7 +216,6 @@ do_is_valid_checks(Txn, Chain) ->
                                                                 false ->
                                                                     {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                                                                 true ->
-                                                                    %% TODO - confirm 'Owner' is the account which pays the fee
                                                                     blockchain_ledger_v1:check_dc_or_hnt_balance(Owner, TxnFee, Ledger, AreFeesEnabled)
                                                             end;
                                                         {ok, _} ->
