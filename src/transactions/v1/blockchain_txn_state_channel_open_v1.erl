@@ -22,7 +22,7 @@
     oui/1,
     nonce/1,
     expire_within/1,
-    fee/1,
+    fee/1, fee/2,
     calculate_fee/2, calculate_fee/3,
     signature/1,
     sign/2,
@@ -85,6 +85,10 @@ expire_within(Txn) ->
 fee(Txn) ->
     Txn#blockchain_txn_state_channel_open_v1_pb.fee.
 
+-spec fee(txn_state_channel_open(), non_neg_integer()) -> txn_state_channel_open().
+fee(Txn, Fee) ->
+    Txn#blockchain_txn_state_channel_open_v1_pb{fee=Fee}.
+
 -spec signature(Txn :: txn_state_channel_open()) -> binary().
 signature(Txn) ->
     Txn#blockchain_txn_state_channel_open_v1_pb.signature.
@@ -109,8 +113,9 @@ calculate_fee(Txn, Chain) ->
 -spec calculate_fee(txn_state_channel_open(), blockchain_ledger_v1:ledger(), boolean()) -> non_neg_integer().
 calculate_fee(_Txn, _Ledger, false) ->
     ?LEGACY_TXN_FEE;
-calculate_fee(Txn, _Ledger, true) ->
-    ?fee(Txn#blockchain_txn_state_channel_open_v1_pb{fee=0}).
+calculate_fee(Txn, Ledger, true) ->
+    ?fee(Txn#blockchain_txn_state_channel_open_v1_pb{fee=0, signature= <<0:512>>}) * blockchain_ledger_v1:payment_txn_fee_multiplier(Ledger).
+
 
 -spec is_valid(Txn :: txn_state_channel_open(),
                Chain :: blockchain:blockchain()) -> ok | {error, any()}.
@@ -137,7 +142,6 @@ absorb(Txn, Chain) ->
     ExpireWithin = ?MODULE:expire_within(Txn),
     Nonce = ?MODULE:nonce(Txn),
     TxnFee = ?MODULE:fee(Txn),
-    %% TODO - confirm 'Owner' is the account which pays the fee
     case blockchain_ledger_v1:debit_fee(Owner, TxnFee, Ledger, AreFeesEnabled) of
         {error, _Reason}=Error ->
             Error;

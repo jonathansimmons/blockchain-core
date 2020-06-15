@@ -21,7 +21,7 @@
     payee/1,
     amount/1,
     nonce/1,
-    fee/1,
+    fee/1, fee/2,
     calculate_fee/2, calculate_fee/3,
     signature/1,
     sign/2,
@@ -86,6 +86,10 @@ nonce(Txn) ->
 fee(Txn) ->
     Txn#blockchain_txn_token_burn_v1_pb.fee.
 
+-spec fee(txn_token_burn(), non_neg_integer()) -> txn_token_burn().
+fee(Txn, Fee) ->
+    Txn#blockchain_txn_token_burn_v1_pb{fee=Fee}.
+
 -spec signature(txn_token_burn()) -> binary().
 signature(Txn) ->
     Txn#blockchain_txn_token_burn_v1_pb.signature.
@@ -117,8 +121,9 @@ calculate_fee(Txn, Chain) ->
 -spec calculate_fee(txn_token_burn(), blockchain_ledger_v1:ledger(), boolean()) -> non_neg_integer().
 calculate_fee(_Txn, _Ledger, false) ->
     ?LEGACY_TXN_FEE;
-calculate_fee(Txn, _Ledger, true) ->
-    ?fee(Txn#blockchain_txn_token_burn_v1_pb{fee=0}).
+calculate_fee(Txn, Ledger, true) ->
+    ?fee(Txn#blockchain_txn_token_burn_v1_pb{fee=0, signature= <<0:512>>}) * blockchain_ledger_v1:payment_txn_fee_multiplier(Ledger).
+
 
 -spec is_valid(txn_token_burn(), blockchain:blockchain()) -> ok | {error, any()}.
 is_valid(Txn, Chain) ->

@@ -25,8 +25,8 @@
     owner_signature/1,
     payer_signature/1,
     nonce/1,
-    staking_fee/1,
-    fee/1,
+    staking_fee/1, staking_fee/2,
+    fee/1, fee/2,
     sign_request/2,
     sign_payer/2,
     sign/2,
@@ -90,99 +90,59 @@ new(Gateway, Owner, Payer, Location, Nonce) ->
         fee=?LEGACY_TXN_FEE
     }.
 
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec hash(txn_assert_location()) -> blockchain_txn:hash().
 hash(Txn) ->
     BaseTxn = Txn#blockchain_txn_assert_location_v1_pb{owner_signature = <<>>, gateway_signature = <<>>},
     EncodedTxn = blockchain_txn_assert_location_v1_pb:encode_msg(BaseTxn),
     crypto:hash(sha256, EncodedTxn).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec gateway(txn_assert_location()) -> libp2p_crypto:pubkey_bin().
 gateway(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.gateway.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec owner(txn_assert_location()) -> libp2p_crypto:pubkey_bin().
 owner(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.owner.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec payer(txn_assert_location()) -> libp2p_crypto:pubkey_bin() | <<>> | undefined.
 payer(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.payer.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec location(txn_assert_location()) -> location().
 location(Txn) ->
     h3:from_string(Txn#blockchain_txn_assert_location_v1_pb.location).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec gateway_signature(txn_assert_location()) -> binary().
 gateway_signature(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.gateway_signature.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec owner_signature(txn_assert_location()) -> binary().
 owner_signature(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.owner_signature.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec payer_signature(txn_assert_location()) -> binary().
 payer_signature(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.payer_signature.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec nonce(txn_assert_location()) -> non_neg_integer().
 nonce(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.nonce.
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
 -spec staking_fee(txn_assert_location()) -> non_neg_integer().
 staking_fee(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.staking_fee.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
+-spec staking_fee(txn_assert_location(), non_neg_integer()) -> txn_assert_location().
+staking_fee(Txn, Fee) ->
+    Txn#blockchain_txn_assert_location_v1_pb{staking_fee=Fee}.
+
 -spec fee(txn_assert_location()) -> non_neg_integer().
 fee(Txn) ->
     Txn#blockchain_txn_assert_location_v1_pb.fee.
 
+-spec fee(txn_assert_location(), non_neg_integer()) -> txn_assert_location().
+fee(Txn, Fee) ->
+    Txn#blockchain_txn_assert_location_v1_pb{fee=Fee}.
 
 
 %%--------------------------------------------------------------------
@@ -199,8 +159,21 @@ calculate_fee(Txn, Chain) ->
 -spec calculate_fee(txn_assert_location(), blockchain_ledger_v1:ledger(), boolean()) -> non_neg_integer().
 calculate_fee(_Txn, _Ledger, false) ->
     ?LEGACY_TXN_FEE;
-calculate_fee(Txn, _Ledger, true) ->
-    ?fee(Txn#blockchain_txn_assert_location_v1_pb{fee=0, staking_fee=0}).
+calculate_fee(Txn, Ledger, true) ->
+    Fee = case Txn#blockchain_txn_assert_location_v1_pb.payer of
+              Payer when Payer == undefined; Payer == <<>> ->
+                  %% no payer signature if there's no payer
+                  ?fee(Txn#blockchain_txn_assert_location_v1_pb{fee=0, staking_fee=0,
+                                                               owner_signature= <<0:512>>,
+                                                               gateway_signature = <<0:512>>,
+                                                               payer_signature= <<>>});
+              _ ->
+                  ?fee(Txn#blockchain_txn_assert_location_v1_pb{fee=0, staking_fee=0,
+                                                               owner_signature= <<0:512>>,
+                                                               gateway_signature = <<0:512>>,
+                                                               payer_signature= <<0:512>>})
+          end,
+    Fee * blockchain_ledger_v1:payment_txn_fee_multiplier(Ledger).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -217,9 +190,7 @@ calculate_staking_fee(Txn, Chain) ->
 calculate_staking_fee(_Txn, _Ledger, false) ->
     ?LEGACY_STAKING_FEE;
 calculate_staking_fee(_Txn, Ledger, true) ->
-    TxnPriceUSD = blockchain_ledger_v1:staking_fee_txn_assert_location_v1(Ledger),
-    FeeInDC = trunc((TxnPriceUSD / ?DC_PRICE)),
-    FeeInDC.
+    blockchain_ledger_v1:staking_fee_txn_assert_location_v1(Ledger).
 
 %%--------------------------------------------------------------------
 %% @doc

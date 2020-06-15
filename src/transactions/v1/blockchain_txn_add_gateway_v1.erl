@@ -22,8 +22,8 @@
     gateway_signature/1,
     payer/1,
     payer_signature/1,
-    staking_fee/1,
-    fee/1,
+    staking_fee/1, staking_fee/2,
+    fee/1, fee/2,
     sign/2,
     sign_request/2,
     sign_payer/2,
@@ -135,6 +135,10 @@ payer_signature(Txn) ->
 staking_fee(Txn) ->
     Txn#blockchain_txn_add_gateway_v1_pb.staking_fee.
 
+-spec staking_fee(txn_add_gateway(), non_neg_integer()) -> txn_add_gateway().
+staking_fee(Txn, Fee) ->
+    Txn#blockchain_txn_add_gateway_v1_pb{staking_fee=Fee}.
+
 %%--------------------------------------------------------------------
 %% @doc
 %% @end
@@ -142,6 +146,10 @@ staking_fee(Txn) ->
 -spec fee(txn_add_gateway()) -> non_neg_integer().
 fee(Txn) ->
     Txn#blockchain_txn_add_gateway_v1_pb.fee.
+
+-spec fee(txn_add_gateway(), non_neg_integer()) -> txn_add_gateway().
+fee(Txn, Fee) ->
+    Txn#blockchain_txn_add_gateway_v1_pb{fee=Fee}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -157,9 +165,21 @@ calculate_fee(Txn, Chain) ->
 -spec calculate_fee(txn_add_gateway(), blockchain_ledger_v1:ledger(), boolean()) -> non_neg_integer().
 calculate_fee(_Txn, _Ledger, false) ->
     ?LEGACY_TXN_FEE;
-calculate_fee(Txn, _Ledger, true) ->
-    ?fee(Txn#blockchain_txn_add_gateway_v1_pb{fee=0, staking_fee=0}).
-
+calculate_fee(Txn, Ledger, true) ->
+    Fee = case Txn#blockchain_txn_add_gateway_v1_pb.payer of
+              Payer when Payer == undefined; Payer == <<>> ->
+                  %% no payer signature if there's no payer
+                  ?fee(Txn#blockchain_txn_add_gateway_v1_pb{fee=0, staking_fee=0,
+                                                            owner_signature = <<0:512>>,
+                                                            gateway_signature = <<0:512>>,
+                                                            payer_signature = <<>>});
+              _ ->
+                  ?fee(Txn#blockchain_txn_add_gateway_v1_pb{fee=0, staking_fee=0,
+                                                            owner_signature = <<0:512>>,
+                                                            gateway_signature = <<0:512>>,
+                                                            payer_signature = <<0:512>>}) %% TODO - without setting this to fixed length test is failing...need to double check
+          end,
+    Fee * blockchain_ledger_v1:payment_txn_fee_multiplier(Ledger).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -176,10 +196,7 @@ calculate_staking_fee(Txn, Chain) ->
 calculate_staking_fee(_Txn, _Ledger, false) ->
     ?LEGACY_STAKING_FEE;
 calculate_staking_fee(_Txn, Ledger, true) ->
-    %%TODO - do staking keys need considered here ? I think not but lets confirm
-    TxnPriceUSD = blockchain_ledger_v1:staking_fee_txn_add_gateway_v1(Ledger),
-    trunc((TxnPriceUSD / ?DC_PRICE)).
-
+    blockchain_ledger_v1:staking_fee_txn_add_gateway_v1(Ledger).
 
 %%--------------------------------------------------------------------
 %% @doc
