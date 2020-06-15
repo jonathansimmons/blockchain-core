@@ -149,10 +149,7 @@ txn_add_gateway(_CmdBase, Keys, Flags) ->
         Owner = proplists:get_value(owner, Keys),
         %% Get options
         Payer = proplists:get_value(payer, Flags, undefined),
-        Amount = proplists:get_value(amount, Flags, 1),
-        Fee = proplists:get_value(fee, Flags, 1),
-
-        {ok, TxnBin} = blockchain:add_gateway_txn(Owner, Payer, Fee, Amount),
+        {ok, TxnBin} = blockchain:add_gateway_txn(Owner, Payer),
         TxnB64 = base64:encode_to_string(TxnBin),
         print_txn_result(TxnB64)
     catch

@@ -45,7 +45,7 @@
 
     init_assumed_valid/2,
 
-    add_gateway_txn/4, assert_loc_txn/6,
+    add_gateway_txn/2, assert_loc_txn/6,
 
     add_snapshot/2, get_snapshot/2, find_last_snapshot/1,
     find_last_snapshots/2,
@@ -1640,13 +1640,10 @@ load_genesis(Dir) ->
     end.
 
 %% @doc Creates a signed add_gatewaytransaction with this blockchain's
-%% keys as the gateway, and the given owner, payer, fee and stacking
-%% fee.
+%% keys as the gateway, and the given owner and payer
 -spec add_gateway_txn(OwnerB58::string(),
-                      PayerB58::string() | undefined,
-                      Fee::pos_integer(),
-                      StakingFee::non_neg_integer()) -> {ok, binary()}.
-add_gateway_txn(OwnerB58, PayerB58, _Fee, _StakingFee) ->
+                      PayerB58::string() | undefined) -> {ok, binary()}.
+add_gateway_txn(OwnerB58, PayerB58) ->
     Owner = libp2p_crypto:b58_to_bin(OwnerB58),
     Payer = case PayerB58 of
                 undefined -> <<>>;
