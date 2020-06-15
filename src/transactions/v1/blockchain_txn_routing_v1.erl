@@ -377,7 +377,7 @@ do_is_valid_checks(Txn, Ledger, Routing, XORFilterSize, XORFilterNum, MinSubnetS
                     TxnFee = ?MODULE:fee(Txn),
                     ExpectedTxnFee = ?MODULE:calculate_fee(Txn, Chain),
                     Owner = ?MODULE:owner(Txn),
-                    case ExpectedTxnFee == TxnFee orelse not AreFeesEnabled of
+                    case ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled of
                         false ->
                             {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                         true ->
@@ -396,7 +396,7 @@ do_is_valid_checks(Txn, Ledger, Routing, XORFilterSize, XORFilterNum, MinSubnetS
                             TxnFee = ?MODULE:fee(Txn),
                             ExpectedTxnFee = ?MODULE:calculate_fee(Txn, Chain),
                             Owner = ?MODULE:owner(Txn),
-                            case ExpectedTxnFee == TxnFee orelse not AreFeesEnabled of
+                            case ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled of
                                 false ->
                                     {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                                 true ->
@@ -422,7 +422,7 @@ do_is_valid_checks(Txn, Ledger, Routing, XORFilterSize, XORFilterNum, MinSubnetS
                             TxnFee = ?MODULE:fee(Txn),
                             ExpectedTxnFee = ?MODULE:calculate_fee(Txn, Chain),
                             Owner = ?MODULE:owner(Txn),
-                            case ExpectedTxnFee == TxnFee orelse not AreFeesEnabled of
+                            case ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled of
                                 false ->
                                     {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                                 true ->
@@ -455,7 +455,7 @@ do_is_valid_checks(Txn, Ledger, Routing, XORFilterSize, XORFilterNum, MinSubnetS
                                     TxnFee = ?MODULE:fee(Txn),
                                     ExpectedTxnFee = ?MODULE:calculate_fee(Txn, Chain),
                                     Owner = ?MODULE:owner(Txn),
-                                    case {(ExpectedTxnFee == TxnFee orelse not AreFeesEnabled), ExpectedStakingFee == StakingFee} of
+                                    case {(ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled), ExpectedStakingFee == StakingFee} of
                                         {false,_} ->
                                             {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                                         {_,false} ->

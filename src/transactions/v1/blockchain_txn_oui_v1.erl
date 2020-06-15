@@ -373,7 +373,7 @@ do_oui_validation_checks(Txn, Chain) ->
                                     ExpectedStakingFee = ?MODULE:calculate_staking_fee(Txn, Chain),
                                     TxnFee = ?MODULE:fee(Txn),
                                     ExpectedTxnFee = ?MODULE:calculate_fee(Txn, Chain),
-                                    case {(ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled), ExpectedStakingFee =< StakingFee} of
+                                    case {(ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled), ExpectedStakingFee == StakingFee} of
                                         {false,_} ->
                                             {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                                         {_,false} ->

@@ -191,7 +191,7 @@ is_valid(Txn, Chain) ->
                                                     AreFeesEnabled = blockchain_ledger_v1:txn_fees_active(Ledger),
                                                     TxnFee = ?MODULE:fee(Txn),
                                                     ExpectedTxnFee = calculate_fee(Txn, Chain),
-                                                    case (ExpectedTxnFee == TxnFee orelse not AreFeesEnabled) of
+                                                    case (ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled) of
                                                         false ->
                                                             {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                                                         true ->

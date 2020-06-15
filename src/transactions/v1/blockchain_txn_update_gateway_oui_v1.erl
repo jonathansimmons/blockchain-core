@@ -159,7 +159,7 @@ is_valid(Txn, Chain) ->
                     GatewayOwner = blockchain_ledger_gateway_v2:owner_address(GWInfo),
                     AreFeesEnabled = blockchain_ledger_v1:txn_fees_active(Ledger),
                     ExpectedTxnFee = ?MODULE:calculate_fee(Txn, Chain),
-                    case ExpectedTxnFee == TxnFee orelse not AreFeesEnabled of
+                    case ExpectedTxnFee =< TxnFee orelse not AreFeesEnabled of
                         false ->
                             {error, {wrong_txn_fee, ExpectedTxnFee, TxnFee}};
                         true ->
